@@ -1,7 +1,7 @@
 from marker.schema import MergedLine, MergedBlock, FullyMergedBlock, Page
 import re
 from typing import List
-
+import copy
 
 def surround_text(s, char_to_insert):
     leading_whitespace = re.match(r'^(\s*)', s).group(1)
@@ -59,8 +59,21 @@ def merge_spans(blocks):
                     bbox=block.bbox,
                     block_types=block_types
                 ))
-        merged_blocks.append(page_blocks)
+        
+        first_block = copy.deepcopy(page_blocks[0])
+        first_line = copy.deepcopy(first_block.lines[0])
+        first_line.text = f"\n\n[comment]: # (Page {first_block.pnum} start)\n\n"
+        first_block.lines = [first_line]
+        page_blocks.insert(0, first_block)
 
+        last_block = copy.deepcopy(page_blocks[-1])
+        last_line = copy.deepcopy(last_block.lines[-1])
+        last_line.text = f"\n\n[comment]: # (Page {last_block.pnum} end)\n\n"
+        last_block.lines = [last_line]
+        page_blocks.append(last_block)
+
+        merged_blocks.append(page_blocks)
+        
     return merged_blocks
 
 
