@@ -18,7 +18,7 @@ def main():
     parser.add_argument("output", help="Output file name")
     parser.add_argument("--max_pages", type=int, default=None, help="Maximum number of pages to parse")
     parser.add_argument("--parallel_factor", type=int, default=1, help="How much to multiply default parallel OCR workers and model batch sizes by.")
-    parser.add_argument("--images_path", type=str, help = "Where to store images ")
+    parser.add_argument("--images_path", type=str, help = "Where to store images")
     args = parser.parse_args()
     
     start = time.time()
@@ -42,7 +42,7 @@ def main():
         for index, image in enumerate(page.images):
             image_name = image.name
             image_name = image_name.split('.')
-            image_name = f'{image_name[0]}_{index}_{page_num}.{image_name[1]}'
+            image_name = f'{image_name[0]}_{index}_{page_num+1}.{image_name[1]}'
             print(image_name)
             with open(os.path.join(args.images_path, image_name), "wb") as fp:
                 fp.write(image.data)
@@ -56,7 +56,7 @@ def main():
     new_content = []
 
     # Expresión regular para encontrar las etiquetas de página
-    page_tag_pattern = r"\[comment\]: # \(Page (\d+) Start\)"
+    page_tag_pattern = r"\[comment-marker\]: # \(page (\d+) start\)"
 
     # Iterar sobre cada línea del contenido
     for line in content:
@@ -81,7 +81,7 @@ def main():
                 if page_number == page_num:
                     image_path = os.path.join(args.images_path, img_file)
                     # Añadir el path de la imagen justo después de la etiqueta
-                    new_content.append(image_path + "\n")
+                    new_content.append(f'![image]({image_path})' + "\n")
 
     # Escribir el contenido modificado en un nuevo archivo Markdown
     with open('with_images' + args.output, 'w', encoding='utf-8') as file:
