@@ -9,7 +9,8 @@ from pypdf import PdfReader
 import re
 import shutil
 import PyPDF2
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, wait
+
 
 configure_logging()
 
@@ -39,8 +40,10 @@ def calculate_markdown(fname, args):
     end = time.time()
     print(f'It took {str(end-start)} seconds to load the models.')
     print('Started converting to markdown.')
+    start = time.time()
     full_text, out_meta = convert_single_pdf(fname, model_lst, max_pages=args.max_pages, parallel_factor=args.parallel_factor)
-    print('Finished converting to markdown.')
+    end = time.time()
+    print(f'Finished converting to markdown. It lasted {str(end-start)}')
     with open(args.output, "w+", encoding='utf-8') as f:
         f.write(full_text)
 
@@ -68,6 +71,8 @@ def read_and_save_images(args):
     end = time.time()
     print(f'Images extracted. It took {str(end-start)}')
     
+def read_and_save_tables(args):
+    pass
 
 
 def postprocess_markdown(args, pages_text):
@@ -132,12 +137,13 @@ def main():
     args = parser.parse_args()
 
     # Crear y empezar los hilos
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ProcessPoolExecutor(max_workers=3) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
         future_markdown = executor.submit(calculate_markdown, args.filename, args)
         future_imagenes = executor.submit(read_and_save_images, args)
 
         textpypdf = text_pypdf.result()
+        wait([future_imagenes, future_markdown]) 
         
     postprocess_markdown(args,textpypdf)
 
