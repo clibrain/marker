@@ -11,7 +11,7 @@ import shutil
 import PyPDF2
 from concurrent.futures import ProcessPoolExecutor, wait
 from extract_tables import TableExtractor
-
+from create_image_from_tables import ImageComposer
 
 configure_logging()
 """
@@ -84,6 +84,12 @@ def read_and_save_tables(args):
     detector.process_all_pages(args.max_pages)
     print('Detected all the tables')
 
+    composer = ImageComposer(cropped_tables_directory, pdf_path)
+    composer.compose_images()
+
+def gpt4_tables():
+    pass
+
 def postprocess_markdown(args, pages_text):
     # Leer el contenido del archivo Markdown
     with open(args.output, 'r', encoding='utf-8') as file:
@@ -148,7 +154,7 @@ def main():
     args = parser.parse_args()
 
     # Crear y empezar los hilos
-    with ProcessPoolExecutor(max_workers=6) as executor:
+    with ProcessPoolExecutor(max_workers=7) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
         future_markdown = executor.submit(calculate_markdown, args.filename, args)
         future_imagenes = executor.submit(read_and_save_images, args)
