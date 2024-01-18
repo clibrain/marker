@@ -10,6 +10,7 @@ import re
 import shutil
 import PyPDF2
 from concurrent.futures import ProcessPoolExecutor, wait
+from extract_tables import TableExtractor
 
 
 configure_logging()
@@ -53,11 +54,9 @@ def calculate_markdown(fname, args):
 
 def read_and_save_images(args):
     start = time.time()
-    if os.path.exists(args.images_path):
-        shutil.rmtree(args.images_path)
 
-    if not os.path.exists(args.images_path):
-            os.makedirs(args.images_path)
+    shutil.rmtree(args.images_path, ignore_errors=True)
+    os.makedirs(args.images_path, exist_ok=True)
 
     reader = PdfReader(args.filename)
     for page_num, page in enumerate(reader.pages):
@@ -72,8 +71,13 @@ def read_and_save_images(args):
     print(f'Images extracted. It took {str(end-start)}')
     
 def read_and_save_tables(args):
-    pass
+    pdf_path = args.filename
+    pages_folder = args.pages_folder
+    cropped_tables_directory = args.cropped_tables_directory
 
+    detector = TableExtractor(pdf_path, pages_folder, cropped_tables_directory)
+    detector.process_all_pages()
+    print('Detected all the tables')
 
 def postprocess_markdown(args, pages_text):
     # Leer el contenido del archivo Markdown
@@ -133,17 +137,20 @@ def main():
     parser.add_argument("output", help="Output file name")
     parser.add_argument("--max_pages", type=int, default=None, help="Maximum number of pages to parse")
     parser.add_argument("--parallel_factor", type=int, default=1, help="How much to multiply default parallel OCR workers and model batch sizes by.")
-    parser.add_argument("--images_path", type=str, help = "Where to store images")
+    parser.add_argument("--images_path", type=str, help = "Where to save images")
+    parser.add_argument("--pages_folder", type=str, help = "Where to save the screenshots of the PDF. ")
+    parser.add_argument("--cropped_tables_directory", type=str, help = "Where to save extracted tables. ")
     args = parser.parse_args()
 
     # Crear y empezar los hilos
-    with ProcessPoolExecutor(max_workers=3) as executor:
+    with ProcessPoolExecutor(max_workers=4) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
         future_markdown = executor.submit(calculate_markdown, args.filename, args)
         future_imagenes = executor.submit(read_and_save_images, args)
+        future_tables = executor.submit(read_and_save_tables, args)
 
         textpypdf = text_pypdf.result()
-        wait([future_imagenes, future_markdown]) 
+        wait([future_imagenes, future_markdown, future_tables]) 
         
     postprocess_markdown(args,textpypdf)
 
