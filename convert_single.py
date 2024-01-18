@@ -14,6 +14,9 @@ from extract_tables import TableExtractor
 
 
 configure_logging()
+"""
+Extraer solo imágenes y tablas hasta max_pages.
+"""
 
 ### PYPDF2 o "unstructured.io" la versión "fast" - > PDFMiner. ### Esto tarda poquísimo. 
 
@@ -60,6 +63,8 @@ def read_and_save_images(args):
 
     reader = PdfReader(args.filename)
     for page_num, page in enumerate(reader.pages):
+        if page_num > args.max_pages:
+            break
         for index, image in enumerate(page.images):
             image_name = image.name
             image_name = image_name.split('.')
@@ -76,7 +81,7 @@ def read_and_save_tables(args):
     cropped_tables_directory = args.cropped_tables_directory
 
     detector = TableExtractor(pdf_path, pages_folder, cropped_tables_directory)
-    detector.process_all_pages()
+    detector.process_all_pages(args.max_pages)
     print('Detected all the tables')
 
 def postprocess_markdown(args, pages_text):
@@ -143,7 +148,7 @@ def main():
     args = parser.parse_args()
 
     # Crear y empezar los hilos
-    with ProcessPoolExecutor(max_workers=4) as executor:
+    with ProcessPoolExecutor(max_workers=6) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
         future_markdown = executor.submit(calculate_markdown, args.filename, args)
         future_imagenes = executor.submit(read_and_save_images, args)

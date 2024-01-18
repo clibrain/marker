@@ -4,9 +4,8 @@ import fitz
 from torchvision import transforms
 from transformers import AutoModelForObjectDetection
 import torch
-import argparse
 import shutil
-from transformers import TableTransformerModel, TableTransformerConfig
+import re
 
 
 """
@@ -62,9 +61,9 @@ class TableExtractor:
 
     
             
-    def convert_pdf_to_images(self):
+    def convert_pdf_to_images(self,max_pages):
         pdf_document = fitz.open(self.pdf_path)
-        for page_number in range(pdf_document.page_count):
+        for page_number in range(0,max_pages):
             page = pdf_document[page_number]
             pix = page.get_pixmap()
             image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
@@ -145,10 +144,22 @@ class TableExtractor:
                 print(f"No table detected in cropped image: {cropped_table_path}")
                 os.remove(cropped_table_path)
 
-    def process_all_pages(self):
-            
-            self.convert_pdf_to_images()
-            for file_path in os.listdir(self.pages_folder):
-                full_path = os.path.join(self.pages_folder, file_path)
+    def process_all_pages(self, max_pages):
+            print('Converting to pdf images')
+            self.convert_pdf_to_images(max_pages)
+            print('Converted')
+            files_with_pages = []
+            for file_name in os.listdir(self.pages_folder):
+                # Extract page number from file name using regular expression
+                match = re.search(r"page_(\d+).png", file_name)
+                if match:
+                    page_number = int(match.group(1))
+                    files_with_pages.append((file_name, page_number))
 
+            # Sort the list based on page numbers
+            files_with_pages.sort(key=lambda x: x[1])
+
+            # Iterate through the sorted file list
+            for file_name, _ in files_with_pages[:max_pages]:
+                full_path = os.path.join(self.pages_folder, file_name)
                 self.detect_and_crop_save_table(full_path, self.cropped_table_directory)
