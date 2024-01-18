@@ -27,7 +27,7 @@ class ImageComposer:
         title_font_size_ratio = 600 / 18
         self.title_font_size = int(self.image_width / title_font_size_ratio)
 
-    def compose_images(self):
+    def compose_images(self, tables_togp4_path):
         index = 0
         images = [{}]
         for file_name in os.listdir(self.images_dir):
@@ -51,7 +51,7 @@ class ImageComposer:
                 index += 1
                 images.append({})
 
-        self.save_images(images)
+        self.save_images(images, tables_togp4_path)
 
     def resize_image(self, image):
         current_image_size = image.size
@@ -79,12 +79,12 @@ class ImageComposer:
 
         return title_image
 
-    def save_images(self, images):
+    def save_images(self, images,tables_togpt4_path):
     
-        shutil.rmtree(f"{os.path.splitext(self.pdf_path)[0]}_tables", ignore_errors=True)
-        os.makedirs(f"{os.path.splitext(self.pdf_path)[0]}_tables", exist_ok=True)
+        shutil.rmtree(tables_togpt4_path, ignore_errors=True)
+        os.makedirs(tables_togpt4_path, exist_ok=True)
         
-        file_name_template = f"{os.path.splitext(self.pdf_path)[0]}_tables/{{part}}.png"
+        file_name_template = f"{tables_togpt4_path}/{{part}}.png"
         for index, images_dict in enumerate(images):
             image_height = self.calculate_image_height(images_dict)
             image = Image.new("RGB", (self.image_width, image_height), color="gray")

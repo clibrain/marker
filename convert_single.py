@@ -75,7 +75,7 @@ def read_and_save_images(args):
     end = time.time()
     print(f'Images extracted. It took {str(end-start)}')
     
-def read_and_save_tables(args):
+def read_and_save_tables(args, tables_togpt4_path):
     pdf_path = args.filename
     pages_folder = args.pages_folder
     cropped_tables_directory = args.cropped_tables_directory
@@ -85,7 +85,7 @@ def read_and_save_tables(args):
     print('Detected all the tables')
 
     composer = ImageComposer(cropped_tables_directory, pdf_path)
-    composer.compose_images()
+    composer.compose_images(tables_togpt4_path)
 
 def gpt4_tables():
     pass
@@ -153,12 +153,14 @@ def main():
     parser.add_argument("--cropped_tables_directory", type=str, help = "Where to save extracted tables. ")
     args = parser.parse_args()
 
+    tables_to_gpt4_path = f'{args.cropped_tables_directory}_togpt4'
+
     # Crear y empezar los hilos
-    with ProcessPoolExecutor(max_workers=7) as executor:
+    with ProcessPoolExecutor(max_workers=4) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
         future_markdown = executor.submit(calculate_markdown, args.filename, args)
         future_imagenes = executor.submit(read_and_save_images, args)
-        future_tables = executor.submit(read_and_save_tables, args)
+        future_tables = executor.submit(read_and_save_tables, args, tables_to_gpt4_path)
 
         textpypdf = text_pypdf.result()
         wait([future_imagenes, future_markdown, future_tables]) 
