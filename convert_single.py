@@ -12,6 +12,7 @@ import PyPDF2
 from concurrent.futures import ProcessPoolExecutor, wait
 from extract_tables import TableExtractor
 from create_image_from_tables import ImageComposer
+from ask_gpt4 import OPENAI_VISION
 
 configure_logging()
 """
@@ -87,8 +88,12 @@ def read_and_save_tables(args, tables_togpt4_path):
     composer = ImageComposer(cropped_tables_directory, pdf_path)
     composer.compose_images(tables_togpt4_path)
 
-def gpt4_tables():
-    pass
+    gpt4_tables(tables_togpt4_path,cropped_tables_directory)
+
+def gpt4_tables(tables_togpt4_path,cropped_tables_directory):
+    print('Asking about tables to GPT4...')
+    gpt4_vision = OPENAI_VISION(tables_togpt4_path, cropped_tables_directory)
+    gpt4_vision.execute()
 
 def postprocess_markdown(args, pages_text):
     # Leer el contenido del archivo Markdown

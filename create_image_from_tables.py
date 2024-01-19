@@ -1,6 +1,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 import shutil
+import json
 
 class ImageComposer:
     def __init__(self, images_dir, pdf_path, image_width=600, inner_images_per_image=2):
@@ -27,6 +28,14 @@ class ImageComposer:
         title_font_size_ratio = 600 / 18
         self.title_font_size = int(self.image_width / title_font_size_ratio)
 
+    def save_metadata(self, images, metadata_path):
+        metadata = {}
+        for index, images_dict in enumerate(images):
+            metadata[f"{index}.png"] = [os.path.splitext(file_name)[0] for file_name in images_dict]
+
+        with open(f"{metadata_path}/metadata.json", "w") as metadata_file:
+            json.dump(metadata, metadata_file, indent=4)
+
     def compose_images(self, tables_togp4_path):
         index = 0
         images = [{}]
@@ -52,6 +61,7 @@ class ImageComposer:
                 images.append({})
 
         self.save_images(images, tables_togp4_path)
+        self.save_metadata(images, tables_togp4_path)
 
     def resize_image(self, image):
         current_image_size = image.size

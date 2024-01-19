@@ -9,26 +9,26 @@ TEMPERATURE = 1
 SEED = 42
 MAX_TOKENS = 4096
 URL = "https://api.openai.com/v1/chat/completions"
-API_KEY = ""
+API_KEY = "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"
 
 SYSTEM_PROMPT  = """You are a helpful table to Markdown converter, with a lot of experience in tables. I need your help with the next problem.
-This image with grey background contains tables.
+This image with grey background may contain tables.
 Those tables have their title in a yellow box with red text just above them.
 Take this special considerations about the tables:
 - Some of the initial columns of some tables have no header, take special care about that, because we need all the columns.
 - Some of the tables are not tables, so also, take special care about that.
 I want them converted into Markdown, encapsulated in a JSON array of objects. Each table will be a JSON object with the following properties:
-- title: The title of the table, as is, keeping the case.
 - isTable: A boolean that says if the table is really a table or not.
 - content: The table content transformed to Markdown.
-- summary: A summary or explanation of the table as Markdown.
+- caption: A detailed caption or explanation of the content of the table. 
 As extra, if the table was not a table, I want its properties content and summary to be null.
 As output, I only want the JSON, no comments about anything else.
 If you do a nice job, I'll give you a generous tip."""
 
 class OPENAI_VISION:
-    def __init__(self, tables_togpt4_path):
+    def __init__(self, tables_togpt4_path, cropped_tables_path):
         self.tables_togpt4_path = tables_togpt4_path
+        self.cropped_tables_path = cropped_tables_path
 
     def call_openAI(self,base64_image):
         messages = [
@@ -62,14 +62,72 @@ class OPENAI_VISION:
         }
         response = requests.post(URL, headers=headers, json=body)
         response = response.json()
+        return response
+
 
     def execute(self):
+        with open(os.path.join(self.tables_togpt4_path, "metadata.json"), 'r') as metadata_file:
+            metadata_titles = json.load(metadata_file)
+
+        all_results = {}
 
         for image in os.listdir(self.tables_togpt4_path):
+            if not image.lower().endswith('.png'):
+                continue
             image_path = os.path.join(self.tables_togpt4_path, image)
+            print(image_path)
+
+            table_titles = metadata_titles.get(image, [])
             with open(image_path, "rb") as image_file:
                 base64_image = base64.b64encode(image_file.read()).decode("utf-8")
                 response = self.call_openAI(base64_image)
+                try: 
+                    response = response["choices"][0]["message"]["content"]
+                    print('response 1',response)
+                    response = response.strip("`").lstrip("json")
+                    
+                    response = re.sub(r"\s+", " ", response)
+                    tables = json.loads(response)
 
+                    for i, table in enumerate(tables):
+                        if i < len(table_titles):
+                            table["title"] = table_titles[i]
+                    
+                    all_results[image] = tables
+
+                    data_to_write = {
+                        "tables": tables
+                    }
+                    base_name = os.path.splitext(image)[0]
+                    json_file_name = f"{base_name}_result.json"
+                    json_path = os.path.join(self.tables_togpt4_path, json_file_name)
+                    # Escribir en el archivo JSON
+                    with open(json_path, 'w') as json_file:
+                        json.dump(data_to_write, json_file, indent=4)
+                    
+                except Exception as e:
+                    all_results[image] = {"Error": 'ERROR'}
+        results_json_path = os.path.join(self.tables_togpt4_path, "all_results.json")
+
+        for image, tables in all_results.items():
+            # Asegúrate de que 'tables' sea una lista de diccionarios
+            if not isinstance(tables, list):
+                continue
+            for table in tables:
+                # Asegúrate de que 'table' sea un diccionario antes de usar 'get'
+                if isinstance(table, dict) and not table.get("isTable", True):
+                    title = table.get("title", "")
+                    if title:
+                            # Construir el nombre del archivo de imagen a eliminar
+                            image_to_delete = f"{title}.png"
+                            image_to_delete_path = os.path.join(self.cropped_tables_path, image_to_delete)
+
+                            # Verificar si el archivo existe y eliminarlo
+                            if os.path.exists(image_to_delete_path):
+                                os.remove(image_to_delete_path)
+                                print(f"Imagen eliminada: {image_to_delete}")
+
+        with open(results_json_path, 'w') as json_file:
+            json.dump(all_results, json_file, indent=4)
 
 
