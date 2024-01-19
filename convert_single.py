@@ -123,6 +123,14 @@ def postprocess_markdown(args, pages_text):
     for i in range(1, len(markdown_pages), 2):
         page_number = int(markdown_pages[i])
         page_content = markdown_pages[i+1]
+        ## Quitar las tablas que ha encontrado marker. 
+        table_regex = r"(\|.*\|\n)+"
+        
+        def replacement(match):
+            if match.group(0).strip():
+                return '\n[//]: # (Marker had detected a table here)\n'
+            return ''
+        page_content = re.sub(table_regex, replacement, page_content, flags=re.MULTILINE)
 
         new_content.append(f"[comment-marker]: # (page {page_number} start)\n")  # Reinsertar la etiqueta de página
         for img_file in sorted(os.listdir(args.images_path)):
@@ -133,18 +141,24 @@ def postprocess_markdown(args, pages_text):
                     image_path = os.path.join(args.images_path, img_file)
                     image_markup = f'![image](./{image_path})\n'
                     new_content.append(image_markup)
-        new_content.append(page_content)  # Añadir el contenido de la página de markdown
-
+        
         # Obtener el texto correspondiente de PyPDF2
         pypdf_text = pypdf_pages.get(page_number, '')
 
         # Si el texto de PyPDF2 cumple con la condición, añadir como comentario
         if pypdf_text and len(pypdf_text.strip()) >= 2 * len(page_content.strip()):
-            comment_text = f"<!--\n{pypdf_text}\n-->\n"
+            table_comment_regex = r"\[//\]: # \(Marker had detected a table here\)"
+            comment_text = ""
+            print('page content', page_content)
+            if re.search(table_comment_regex, page_content):
+                comment_text = '\n[//]: # (Marker had detected a table here)\n'
+            comment_text = comment_text + f"<!--\n{pypdf_text}\n-->\n"
+            print('comment text', comment_text)
             new_content.append(comment_text)
+        else:
+            new_content.append(page_content) 
 
-        
-
+        ## Añadir las tablas.
         for _, tables in results_tables_data.items():
             for table in tables:
                 if "title" in table:
@@ -153,9 +167,9 @@ def postprocess_markdown(args, pages_text):
                     if title_page_number == page_number:
                         # Formatear la tabla y el caption para Markdown
                         markdown_table = table["content"].replace("|", "\n|")  # Ajustar la tabla para formato Markdown
-                        markdown_table = 'Table\n' + markdown_table 
+                        markdown_table = 'Table\n' + markdown_table + "\n"
                         caption = table.get("caption", "")
-                        caption = 'Table Caption' + caption
+                        caption = 'Table Caption' + caption + "\n"
                         # Añadir la tabla y el caption al contenido de la página
                         new_content.append(markdown_table)
                         new_content.append(caption)
@@ -181,12 +195,12 @@ def main():
     # Crear y empezar los hilos
     with ProcessPoolExecutor(max_workers=4) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
-        #future_markdown = executor.submit(calculate_markdown, args.filename, args)
-        #future_imagenes = executor.submit(read_and_save_images, args)
-        #future_tables = executor.submit(read_and_save_tables, args, tables_to_gpt4_path)
+        future_markdown = executor.submit(calculate_markdown, args.filename, args)
+        future_imagenes = executor.submit(read_and_save_images, args)
+        future_tables = executor.submit(read_and_save_tables, args, tables_to_gpt4_path)
 
         textpypdf = text_pypdf.result()
-        #wait([future_imagenes, future_markdown, future_tables]) 
+        wait([future_imagenes, future_markdown, future_tables]) 
         
     postprocess_markdown(args,textpypdf)
 

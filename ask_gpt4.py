@@ -9,7 +9,7 @@ TEMPERATURE = 1
 SEED = 42
 MAX_TOKENS = 4096
 URL = "https://api.openai.com/v1/chat/completions"
-API_KEY = "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"
+API_KEY = ""
 
 SYSTEM_PROMPT  = """You are a helpful table to Markdown converter, with a lot of experience in tables. I need your help with the next problem.
 This image with grey background may contain tables.
