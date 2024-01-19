@@ -96,9 +96,14 @@ def gpt4_tables(tables_togpt4_path,cropped_tables_directory):
     gpt4_vision.execute()
 
 def postprocess_markdown(args, pages_text):
+    print('Began postprocessing markdown')
     # Leer el contenido del archivo Markdown
     with open(args.output, 'r', encoding='utf-8') as file:
         content = file.read()
+    
+    results_path = os.path.join(args.cropped_tables_directory + "_togpt4", "all_results.json")
+    with open(results_path, 'r') as file:
+        results_tables_data =  json.load(file)
 
     # Preparar para escribir el contenido modificado
     new_content = []
@@ -120,6 +125,14 @@ def postprocess_markdown(args, pages_text):
         page_content = markdown_pages[i+1]
 
         new_content.append(f"[comment-marker]: # (page {page_number} start)\n")  # Reinsertar la etiqueta de página
+        for img_file in sorted(os.listdir(args.images_path)):
+            match = image_filename_pattern.search(img_file)
+            if match:
+                img_page_number = int(match.group(1))
+                if img_page_number == page_number:
+                    image_path = os.path.join(args.images_path, img_file)
+                    image_markup = f'![image](./{image_path})\n'
+                    new_content.append(image_markup)
         new_content.append(page_content)  # Añadir el contenido de la página de markdown
 
         # Obtener el texto correspondiente de PyPDF2
@@ -130,20 +143,25 @@ def postprocess_markdown(args, pages_text):
             comment_text = f"<!--\n{pypdf_text}\n-->\n"
             new_content.append(comment_text)
 
-        for img_file in sorted(os.listdir(args.images_path)):
-            match = image_filename_pattern.search(img_file)
-            if match:
-                img_page_number = int(match.group(1))
-                if img_page_number == page_number:
-                    image_path = os.path.join(args.images_path, img_file)
-                    image_markup = f'![image](./{image_path})\n'
-                    new_content.append(image_markup)
-
-        # Aquí añadirías las imágenes o cualquier otro contenido necesario
         
 
-    # Escribir el contenido modificado en un nuevo archivo Markdown
-    with open('with_images_' + args.output, 'w', encoding='utf-8') as file:
+        for _, tables in results_tables_data.items():
+            for table in tables:
+                if "title" in table:
+                    # Extraer el número de página del título de la tabla
+                    title_page_number = int(table["title"].split("_")[1])
+                    if title_page_number == page_number:
+                        # Formatear la tabla y el caption para Markdown
+                        markdown_table = table["content"].replace("|", "\n|")  # Ajustar la tabla para formato Markdown
+                        markdown_table = 'Table\n' + markdown_table 
+                        caption = table.get("caption", "")
+                        caption = 'Table Caption' + caption
+                        # Añadir la tabla y el caption al contenido de la página
+                        new_content.append(markdown_table)
+                        new_content.append(caption)
+
+# Escribir el contenido modificado en un nuevo archivo Markdown
+    with open('final' + args.output, 'w', encoding='utf-8') as file:
         file.writelines(new_content)
 
 
@@ -163,12 +181,12 @@ def main():
     # Crear y empezar los hilos
     with ProcessPoolExecutor(max_workers=4) as executor:
         text_pypdf = executor.submit(extract_pypdf, args.filename)
-        future_markdown = executor.submit(calculate_markdown, args.filename, args)
-        future_imagenes = executor.submit(read_and_save_images, args)
-        future_tables = executor.submit(read_and_save_tables, args, tables_to_gpt4_path)
+        #future_markdown = executor.submit(calculate_markdown, args.filename, args)
+        #future_imagenes = executor.submit(read_and_save_images, args)
+        #future_tables = executor.submit(read_and_save_tables, args, tables_to_gpt4_path)
 
         textpypdf = text_pypdf.result()
-        wait([future_imagenes, future_markdown, future_tables]) 
+        #wait([future_imagenes, future_markdown, future_tables]) 
         
     postprocess_markdown(args,textpypdf)
 

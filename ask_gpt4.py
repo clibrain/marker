@@ -9,7 +9,7 @@ TEMPERATURE = 1
 SEED = 42
 MAX_TOKENS = 4096
 URL = "https://api.openai.com/v1/chat/completions"
-API_KEY = "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"
+API_KEY = "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"
 
 SYSTEM_PROMPT  = """You are a helpful table to Markdown converter, with a lot of experience in tables. I need your help with the next problem.
 This image with grey background may contain tables.
@@ -70,7 +70,7 @@ class OPENAI_VISION:
             metadata_titles = json.load(metadata_file)
 
         all_results = {}
-
+        titles_to_delete = []
         for image in os.listdir(self.tables_togpt4_path):
             if not image.lower().endswith('.png'):
                 continue
@@ -81,6 +81,7 @@ class OPENAI_VISION:
             with open(image_path, "rb") as image_file:
                 base64_image = base64.b64encode(image_file.read()).decode("utf-8")
                 response = self.call_openAI(base64_image)
+                print(response)
                 try: 
                     response = response["choices"][0]["message"]["content"]
                     print('response 1',response)
@@ -107,6 +108,7 @@ class OPENAI_VISION:
                     
                 except Exception as e:
                     all_results[image] = {"Error": 'ERROR'}
+                    print(f'Response has exception {e}')
         results_json_path = os.path.join(self.tables_togpt4_path, "all_results.json")
 
         for image, tables in all_results.items():
@@ -118,16 +120,24 @@ class OPENAI_VISION:
                 if isinstance(table, dict) and not table.get("isTable", True):
                     title = table.get("title", "")
                     if title:
-                            # Construir el nombre del archivo de imagen a eliminar
-                            image_to_delete = f"{title}.png"
-                            image_to_delete_path = os.path.join(self.cropped_tables_path, image_to_delete)
+                        titles_to_delete.append(title)
+                        # Construir el nombre del archivo de imagen a eliminar
+                        image_to_delete = f"{title}.png"
+                        image_to_delete_path = os.path.join(self.cropped_tables_path, image_to_delete)
 
-                            # Verificar si el archivo existe y eliminarlo
-                            if os.path.exists(image_to_delete_path):
-                                os.remove(image_to_delete_path)
-                                print(f"Imagen eliminada: {image_to_delete}")
+                        # Verificar si el archivo existe y eliminarlo
+                        if os.path.exists(image_to_delete_path):
+                            os.remove(image_to_delete_path)
+                            print(f"Imagen eliminada: {image_to_delete}")
+
+        for image, tables in list(all_results.items()):
+            all_results[image] = [table for table in tables if isinstance(table, dict) and table.get("title", "") not in titles_to_delete]
+            if not all_results[image]:  # Si no hay tablas válidas, elimina la entrada de la imagen
+                del all_results[image]
 
         with open(results_json_path, 'w') as json_file:
             json.dump(all_results, json_file, indent=4)
+
+        
 
 
