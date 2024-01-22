@@ -135,7 +135,7 @@ def postprocess_markdown(args, pages_text):
         
         def replacement(match):
             if match.group(0).strip():
-                return '\n[//]: # (Marker had detected a table here and we have deleted it)\n'
+                return '\n[comment-table-detected]: # (Marker had detected a table here and we have deleted it)\n'
             return ''
         page_content = re.sub(table_regex, replacement, page_content, flags=re.MULTILINE)
 
@@ -154,11 +154,11 @@ def postprocess_markdown(args, pages_text):
 
         # Si el texto de PyPDF2 cumple con la condición, añadir como comentario
         if pypdf_text and len(pypdf_text.strip()) >= 2 * len(page_content.strip()): ## TODO: revisar esta condición. 
-            table_comment_regex = r"\[//\]: # \(Marker had detected a table here and we have deleted it\)"
+            table_comment_regex = r"\[comment-table-detected\]: # \(Marker had detected a table here and we have deleted it\)"
             comment_text = ""
             print('page content', page_content)
             if re.search(table_comment_regex, page_content):
-                comment_text = '\n[//]: # (Marker had detected a table here and we have deleted it)\n'
+                comment_text = '\n[comment-table-detected]: # (Marker had detected a table here and we have deleted it)\n'
             comment_text = comment_text + f"<!--\n{pypdf_text}\n-->\n"
             print('comment text', comment_text)
             new_content.append(comment_text)
@@ -173,10 +173,15 @@ def postprocess_markdown(args, pages_text):
                     title_page_number = int(table["title"].split("_")[1])
                     if title_page_number == page_number:
                         # Formatear la tabla y el caption para Markdown
-                        markdown_table = table["content"].replace("|", "\n|")  # Ajustar la tabla para formato Markdown
-                        markdown_table = 'Table\n' + markdown_table + "\n" # TODO: ver como escribir la tabla en el markdown. 
+                        contenido_tabla = table["content"]
+                        lineas_tabla = contenido_tabla.split('\n')
+
+                        # Reunir las líneas en una tabla de Markdown
+                        markdown_table = '\n'.join(lineas_tabla)
+                        #markdown_table = table["content"].replace("|", "\n|")  # Ajustar la tabla para formato Markdown
+                        markdown_table = '[comment-table]: # ' + '(Table)\n' + markdown_table + "\n" # TODO: ver como escribir la tabla en el markdown. 
                         caption = table.get("caption", "")
-                        caption = 'Table Caption' + caption + "\n" # TODO: poner un comentario de markdown. 
+                        caption = '[comment-table-caption]: # ' + '(Table Caption:) ' + caption + "\n" # TODO: poner un comentario de markdown. 
                         # Añadir la tabla y el caption al contenido de la página
                         new_content.append(markdown_table)
                         new_content.append(caption)
