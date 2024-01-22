@@ -38,7 +38,8 @@ def extract_pypdf(fname):
     return pages_text
 
 
-### Modelos deberían estar precargados de alguna manera. 
+### Calcular el markdown con 'marker' 
+
 def calculate_markdown(fname, args):
     start = time.time()
     model_lst = load_all_models()
@@ -55,6 +56,8 @@ def calculate_markdown(fname, args):
     out_meta_filename = args.output.rsplit(".", 1)[0] + "_meta.json"
     with open(out_meta_filename, "w+") as f:
         f.write(json.dumps(out_meta, indent=4))
+
+### Guardar las imágenes del PDF en disco. 
 
 def read_and_save_images(args):
     start = time.time()
@@ -75,6 +78,8 @@ def read_and_save_images(args):
                 fp.write(image.data)
     end = time.time()
     print(f'Images extracted. It took {str(end-start)}')
+
+### Guardar las tablas detectadas del PDF en disco, crear las imágenes que combinan las tablas y preguntar a GPT-4V qué son tablas. 
     
 def read_and_save_tables(args, tables_togpt4_path):
     pdf_path = args.filename
@@ -90,13 +95,15 @@ def read_and_save_tables(args, tables_togpt4_path):
 
     gpt4_tables(tables_togpt4_path,cropped_tables_directory)
 
+### Petición a GPT4V.  
+
 def gpt4_tables(tables_togpt4_path,cropped_tables_directory):
     print('Asking about tables to GPT4...')
     gpt4_vision = OPENAI_VISION(tables_togpt4_path, cropped_tables_directory)
     gpt4_vision.execute()
 
 def postprocess_markdown(args, pages_text):
-    print('Began postprocessing markdown')
+    print('Beginning postprocessing markdown')
     # Leer el contenido del archivo Markdown
     with open(args.output, 'r', encoding='utf-8') as file:
         content = file.read()
@@ -119,16 +126,16 @@ def postprocess_markdown(args, pages_text):
 
     image_filename_pattern = re.compile(r"_([0-9]+)\.(jpg|png)$")
 
-    # Reensamblar el contenido, insertando el texto de pypdf donde sea necesario
+    
     for i in range(1, len(markdown_pages), 2):
         page_number = int(markdown_pages[i])
         page_content = markdown_pages[i+1]
-        ## Quitar las tablas que ha encontrado marker. 
+        ## Quitar las tablas que ha encontrado marker, porque no suelen ser buenas.  
         table_regex = r"(\|.*\|\n)+"
         
         def replacement(match):
             if match.group(0).strip():
-                return '\n[//]: # (Marker had detected a table here)\n'
+                return '\n[//]: # (Marker had detected a table here and we have deleted it)\n'
             return ''
         page_content = re.sub(table_regex, replacement, page_content, flags=re.MULTILINE)
 
@@ -146,12 +153,12 @@ def postprocess_markdown(args, pages_text):
         pypdf_text = pypdf_pages.get(page_number, '')
 
         # Si el texto de PyPDF2 cumple con la condición, añadir como comentario
-        if pypdf_text and len(pypdf_text.strip()) >= 2 * len(page_content.strip()):
-            table_comment_regex = r"\[//\]: # \(Marker had detected a table here\)"
+        if pypdf_text and len(pypdf_text.strip()) >= 2 * len(page_content.strip()): ## TODO: revisar esta condición. 
+            table_comment_regex = r"\[//\]: # \(Marker had detected a table here and we have deleted it\)"
             comment_text = ""
             print('page content', page_content)
             if re.search(table_comment_regex, page_content):
-                comment_text = '\n[//]: # (Marker had detected a table here)\n'
+                comment_text = '\n[//]: # (Marker had detected a table here and we have deleted it)\n'
             comment_text = comment_text + f"<!--\n{pypdf_text}\n-->\n"
             print('comment text', comment_text)
             new_content.append(comment_text)
@@ -167,9 +174,9 @@ def postprocess_markdown(args, pages_text):
                     if title_page_number == page_number:
                         # Formatear la tabla y el caption para Markdown
                         markdown_table = table["content"].replace("|", "\n|")  # Ajustar la tabla para formato Markdown
-                        markdown_table = 'Table\n' + markdown_table + "\n"
+                        markdown_table = 'Table\n' + markdown_table + "\n" # TODO: ver como escribir la tabla en el markdown. 
                         caption = table.get("caption", "")
-                        caption = 'Table Caption' + caption + "\n"
+                        caption = 'Table Caption' + caption + "\n" # TODO: poner un comentario de markdown. 
                         # Añadir la tabla y el caption al contenido de la página
                         new_content.append(markdown_table)
                         new_content.append(caption)
