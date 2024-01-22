@@ -3,6 +3,7 @@ import json
 import re
 import requests
 import os
+import concurrent.futures 
 
 MODEL = "gpt-4-vision-preview"
 TEMPERATURE = 1
@@ -63,6 +64,41 @@ class OPENAI_VISION:
         response = requests.post(URL, headers=headers, json=body)
         response = response.json()
         return response
+    
+
+    def process_image(self, image, metadata_titles):
+        image_path = os.path.join(self.tables_togpt4_path, image)
+        print(image_path)
+
+        table_titles = metadata_titles.get(image, [])
+        with open(image_path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+            response = self.call_openAI(base64_image)
+            print(response)
+            try: 
+                response = response["choices"][0]["message"]["content"]
+                print('response 1', response)
+                response = response.strip("`").lstrip("json")
+                response = re.sub(r"\s+", " ", response)
+                tables = json.loads(response)
+
+                for i, table in enumerate(tables):
+                    if i < len(table_titles):
+                        table["title"] = table_titles[i]
+
+                data_to_write = {
+                    "tables": tables
+                }
+                base_name = os.path.splitext(image)[0]
+                json_file_name = f"{base_name}_result.json"
+                json_path = os.path.join(self.tables_togpt4_path, json_file_name)
+                with open(json_path, 'w') as json_file:
+                    json.dump(data_to_write, json_file, indent=4)
+                
+                return tables
+            except Exception as e:
+                print(f'Response has exception {e}')
+                return {"Error": 'ERROR'}
 
 
     def execute(self):
@@ -71,73 +107,40 @@ class OPENAI_VISION:
 
         all_results = {}
         titles_to_delete = []
-        for image in os.listdir(self.tables_togpt4_path):
-            if not image.lower().endswith('.png'):
-                continue
-            image_path = os.path.join(self.tables_togpt4_path, image)
-            print(image_path)
 
-            table_titles = metadata_titles.get(image, [])
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
-                response = self.call_openAI(base64_image)
-                print(response)
-                try: 
-                    response = response["choices"][0]["message"]["content"]
-                    print('response 1',response)
-                    response = response.strip("`").lstrip("json")
-                    
-                    response = re.sub(r"\s+", " ", response)
-                    tables = json.loads(response)
-
-                    for i, table in enumerate(tables):
-                        if i < len(table_titles):
-                            table["title"] = table_titles[i]
-                    
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_image = {executor.submit(self.process_image, image, metadata_titles): image for image in os.listdir(self.tables_togpt4_path) if image.lower().endswith('.png')}
+            
+            for future in concurrent.futures.as_completed(future_to_image):
+                image = future_to_image[future]
+                try:
+                    tables = future.result()
                     all_results[image] = tables
+                except Exception as exc:
+                    print(f'{image} generated an exception: {exc}')
 
-                    data_to_write = {
-                        "tables": tables
-                    }
-                    base_name = os.path.splitext(image)[0]
-                    json_file_name = f"{base_name}_result.json"
-                    json_path = os.path.join(self.tables_togpt4_path, json_file_name)
-                    # Escribir en el archivo JSON
-                    with open(json_path, 'w') as json_file:
-                        json.dump(data_to_write, json_file, indent=4)
-                    
-                except Exception as e:
-                    all_results[image] = {"Error": 'ERROR'}
-                    print(f'Response has exception {e}')
-        results_json_path = os.path.join(self.tables_togpt4_path, "all_results.json")
-
+        # Process the results
         for image, tables in all_results.items():
-            # Asegúrate de que 'tables' sea una lista de diccionarios
             if not isinstance(tables, list):
                 continue
             for table in tables:
-                # Asegúrate de que 'table' sea un diccionario antes de usar 'get'
                 if isinstance(table, dict) and not table.get("isTable", True):
                     title = table.get("title", "")
                     if title:
                         titles_to_delete.append(title)
-                        # Construir el nombre del archivo de imagen a eliminar
                         image_to_delete = f"{title}.png"
                         image_to_delete_path = os.path.join(self.cropped_tables_path, image_to_delete)
-
-                        # Verificar si el archivo existe y eliminarlo
                         if os.path.exists(image_to_delete_path):
                             os.remove(image_to_delete_path)
                             print(f"Imagen eliminada: {image_to_delete}")
 
         for image, tables in list(all_results.items()):
             all_results[image] = [table for table in tables if isinstance(table, dict) and table.get("title", "") not in titles_to_delete]
-            if not all_results[image]:  # Si no hay tablas válidas, elimina la entrada de la imagen
+            if not all_results[image]:
                 del all_results[image]
 
+        results_json_path = os.path.join(self.tables_togpt4_path, "all_results.json")
         with open(results_json_path, 'w') as json_file:
             json.dump(all_results, json_file, indent=4)
-
-        
 
 
